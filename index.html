@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Programmatic DOOH Smart Billboard Auction Twin</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              850: '#172033',
+              950: '#0b1120',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 25px rgba(56, 189, 248, 0.25); }
+      50% { box-shadow: 0 0 40px rgba(56, 189, 248, 0.5); }
+    }
+    .billboard-screen {
+      animation: pulseGlow 4s infinite ease-in-out;
+      transition: background 0.6s ease, filter 0.4s ease;
+    }
+    /* Custom scrollbar for auction feed */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 min-h-screen flex flex-col font-sans">
+
+  <!-- TOP NAVIGATION HEADER -->
+  <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 px-4 py-3 shadow-sm">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-indigo-600 text-white rounded-lg shadow">
+          <i data-lucide="monitor-play" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight">Programmatic DOOH Auction Twin</h1>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> NODE #DX-409 LIVE
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Real-Time Bidding (RTB) & Environmental Sensor Digital Twin</p>
+        </div>
+      </div>
+
+      <!-- Simulation & Data Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Play / Pause -->
+        <button id="btn-play-pause" onclick="toggleSimulation()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm">
+          <i id="icon-play-pause" data-lucide="pause" class="w-4 h-4"></i>
+          <span id="text-play-pause">Pause Loop</span>
+        </button>
+
+        <!-- Single Step -->
+        <button onclick="runAuctionCycle()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 transition">
+          <i data-lucide="step-forward" class="w-4 h-4"></i>
+          <span>Step Auction</span>
+        </button>
+
+        <!-- Speed Toggle -->
+        <button id="btn-speed" onclick="toggleSpeed()" class="px-3 py-1.5 rounded-lg text-sm font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 transition">
+          Speed: 1x
+        </button>
+
+        <div class="h-6 w-px bg-slate-300 dark:bg-slate-700 mx-1 hidden sm:block"></div>
+
+        <!-- Methodology Modal Trigger -->
+        <button onclick="toggleModal(true)" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 transition">
+          <i data-lucide="book-open" class="w-4 h-4"></i>
+          <span>Model Logic</span>
+        </button>
+
+        <!-- Light / Dark Mode Toggle -->
+        <button onclick="toggleTheme()" aria-label="Toggle Theme" class="p-2 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 transition">
+          <i id="theme-icon" data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN DASHBOARD GRID -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- LEFT COLUMN: SCENARIOS, SENSORS & GOVERNANCE (4 cols) -->
+    <section class="lg:col-span-4 space-y-5">
+
+      <!-- Scenarios Card -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="sliders" class="w-4 h-4 text-indigo-500"></i> Test Scenarios
+          </h2>
+          <span id="active-scenario-badge" class="text-xs font-medium px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">Custom</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="applyScenario('rush')" class="scenario-btn text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition bg-slate-50 dark:bg-slate-850">
+            <div class="text-xs font-bold text-indigo-600 dark:text-indigo-400">1. Morning Rush</div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">12 km/h • 110 cars/m</div>
+          </button>
+          <button onclick="applyScenario('heatwave')" class="scenario-btn text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition bg-slate-50 dark:bg-slate-850">
+            <div class="text-xs font-bold text-rose-600 dark:text-rose-400">2. Heatwave Alert</div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">39°C • Beverage Trigger</div>
+          </button>
+          <button onclick="applyScenario('smog')" class="scenario-btn text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition bg-slate-50 dark:bg-slate-850">
+            <div class="text-xs font-bold text-amber-600 dark:text-amber-400">3. Smog / High AQI</div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">AQI 195 • Health Priority</div>
+          </button>
+          <button onclick="applyScenario('latenight')" class="scenario-btn text-left p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition bg-slate-50 dark:bg-slate-850">
+            <div class="text-xs font-bold text-cyan-600 dark:text-cyan-400">4. Late-Night Floor</div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">95 km/h • $20 High Floor</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Environmental & Exchange Controls -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-4">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <i data-lucide="radio" class="w-4 h-4 text-emerald-500"></i> Live Sensor Feeds & Bid Floor
+        </h2>
+
+        <!-- Traffic Speed -->
+        <div>
+          <div class="flex justify-between text-xs font-medium mb-1">
+            <span>Traffic Speed (Dwell Factor)</span>
+            <span id="val-speed" class="font-bold text-indigo-600 dark:text-indigo-400">45 km/h</span>
+          </div>
+          <input id="input-speed" type="range" min="5" max="100" value="45" oninput="onSliderChange()" class="w-full accent-indigo-600 cursor-pointer" />
+          <div class="flex justify-between text-[10px] text-slate-400">
+            <span>5 km/h (Gridlock)</span>
+            <span>100 km/h (Free-flow)</span>
+          </div>
+        </div>
+
+        <!-- Vehicle Density -->
+        <div>
+          <div class="flex justify-between text-xs font-medium mb-1">
+            <span>Vehicle Density</span>
+            <span id="val-density" class="font-bold text-indigo-600 dark:text-indigo-400">60 cars/min</span>
+          </div>
+          <input id="input-density" type="range" min="10" max="120" value="60" oninput="onSliderChange()" class="w-full accent-indigo-600 cursor-pointer" />
+          <div class="flex justify-between text-[10px] text-slate-400">
+            <span>10 cars/min</span>
+            <span>120 cars/min</span>
+          </div>
+        </div>
+
+        <!-- Ambient Temperature -->
+        <div>
+          <div class="flex justify-between text-xs font-medium mb-1">
+            <span>Ambient Temperature</span>
+            <span id="val-temp" class="font-bold text-rose-600 dark:text-rose-400">22°C</span>
+          </div>
+          <input id="input-temp" type="range" min="-5" max="45" value="22" oninput="onSliderChange()" class="w-full accent-rose-500 cursor-pointer" />
+          <div class="flex justify-between text-[10px] text-slate-400">
+            <span>-5°C (Winter)</span>
+            <span>45°C (Extreme Heat)</span>
+          </div>
+        </div>
+
+        <!-- Air Quality Index -->
+        <div>
+          <div class="flex justify-between text-xs font-medium mb-1">
+            <span>Air Quality Index (AQI)</span>
+            <span id="val-aqi" class="font-bold text-amber-600 dark:text-amber-400">65 (Moderate)</span>
+          </div>
+          <input id="input-aqi" type="range" min="20" max="250" value="65" oninput="onSliderChange()" class="w-full accent-amber-500 cursor-pointer" />
+          <div class="flex justify-between text-[10px] text-slate-400">
+            <span>20 (Good)</span>
+            <span>250 (Hazardous)</span>
+          </div>
+        </div>
+
+        <!-- Minimum CPM Bid Floor -->
+        <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div class="flex justify-between text-xs font-medium mb-1">
+            <span class="font-semibold">Minimum CPM Bid Floor ($)</span>
+            <span id="val-floor" class="font-bold text-emerald-600 dark:text-emerald-400">$9.00</span>
+          </div>
+          <input id="input-floor" type="range" min="2" max="25" step="0.5" value="9" oninput="onSliderChange()" class="w-full accent-emerald-500 cursor-pointer" />
+          <div class="flex justify-between text-[10px] text-slate-400">
+            <span>$2.00 (High Fill)</span>
+            <span>$25.00 (Premium Gate)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Governance & Data Management Card -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-4">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-4 h-4 text-teal-500"></i> Governance & Data I/O
+        </h2>
+
+        <!-- Governance Toggle -->
+        <label class="flex items-start justify-between gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 cursor-pointer">
+          <div>
+            <div class="text-xs font-bold">Enforce Eco & Public Safety Override</div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Caps brightness at 70% during high AQI (>150) to reduce grid load & reserves 15% slots for municipal alerts.
+            </p>
+          </div>
+          <input id="toggle-governance" type="checkbox" checked onchange="updateGovernanceState()" class="mt-1 w-4 h-4 accent-teal-600 rounded cursor-pointer" />
+        </label>
+
+        <!-- Data Import / Export Buttons -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+          <button onclick="exportCSV()" class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-sm">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Log (CSV)
+          </button>
+
+          <label class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 cursor-pointer transition">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import Rules (JSON)
+            <input type="file" id="json-upload" accept=".json" onchange="importJSONRules(event)" class="hidden" />
+          </label>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+          <span id="rules-count-label">Active Bidders: 8 Advertisers</span>
+          <button onclick="downloadSampleJSON()" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+            Download Sample JSON
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- CENTER COLUMN: BILLBOARD TWIN, KPIS & EXECUTIVE ADVISOR (5 cols) -->
+    <section class="lg:col-span-5 space-y-5">
+
+      <!-- Physical Billboard Digital Twin Preview -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="tv" class="w-4 h-4 text-sky-500"></i> Physical LED Twin Display
+          </span>
+          <span id="trigger-badge" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-sky-400">
+            Trigger: Standard Rotation
+          </span>
+        </div>
+
+        <!-- Billboard Frame -->
+        <div class="p-3 bg-slate-800 rounded-xl border-4 border-slate-700 shadow-inner">
+          <div id="billboard-canvas" class="billboard-screen relative rounded-lg p-6 min-h-[220px] flex flex-col justify-between text-white overflow-hidden bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500">
+            <!-- Top Ad Metadata -->
+            <div class="flex items-center justify-between z-10">
+              <span id="ad-category-pill" class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-black/30 backdrop-blur-sm">
+                AUTOMOTIVE
+              </span>
+              <span id="ad-cpm-pill" class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-black/40">
+                Clearing CPM: $14.20
+              </span>
+            </div>
+
+            <!-- Center Creative Content -->
+            <div class="my-4 z-10">
+              <div id="ad-brand" class="text-xs font-semibold uppercase tracking-widest opacity-90">VoltDrive EV</div>
+              <h3 id="ad-headline" class="text-2xl sm:text-3xl font-extrabold leading-tight mt-1 drop-shadow">
+                Zero Emissions. Instant Torque.
+              </h3>
+              <p id="ad-subtext" class="text-xs sm:text-sm opacity-90 mt-1.5 max-w-md">
+                Beat the highway commute with 350-mile range. Visit Downtown Showroom today.
+              </p>
+            </div>
+
+            <!-- Bottom Screen Telemetry Strip -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/20 text-[11px] font-mono z-10">
+              <span id="hw-brightness">Brightness: 95%</span>
+              <span id="hw-power">Power: 4.8 kW</span>
+              <span id="hw-dwell">Dwell Mult: 1.35x</span>
+              <span id="hw-slot">Cycle #1</span>
+            </div>
+          </div>
+          <!-- Billboard Pylon Stand -->
+          <div class="w-16 h-4 bg-slate-700 mx-auto rounded-b"></div>
+        </div>
+      </div>
+
+      <!-- 4 KPI Cards -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm">
+          <div class="text-xs text-slate-500 dark:text-slate-400 font-medium">Clearing CPM</div>
+          <div id="kpi-cpm" class="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">$0.00</div>
+          <div id="kpi-cpm-sub" class="text-[11px] text-slate-400 mt-0.5">Floor: $9.00</div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm">
+          <div class="text-xs text-slate-500 dark:text-slate-400 font-medium">Est. Hourly Revenue</div>
+          <div id="kpi-revenue" class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">$0.00/hr</div>
+          <div class="text-[11px] text-slate-400 mt-0.5">Based on live density</div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm">
+          <div class="text-xs text-slate-500 dark:text-slate-400 font-medium">Paid Ad Fill Rate</div>
+          <div id="kpi-fill" class="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">100%</div>
+          <div id="kpi-fill-sub" class="text-[11px] text-slate-400 mt-0.5">0 unsold slots</div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm">
+          <div class="text-xs text-slate-500 dark:text-slate-400 font-medium">Viewable Impressions/Hr</div>
+          <div id="kpi-impressions" class="text-2xl font-extrabold text-sky-600 dark:text-sky-400 mt-1">0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5">Dwell-adjusted reach</div>
+        </div>
+      </div>
+
+      <!-- Executive Governance & Pricing Advisor -->
+      <div id="advisor-box" class="rounded-xl border p-4 shadow-sm transition-colors bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800">
+        <div class="flex items-start gap-3">
+          <div id="advisor-icon-wrap" class="p-2 rounded-lg bg-indigo-600 text-white shrink-0 mt-0.5">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+              Executive Governance & Pricing Advisor
+            </h3>
+            <p id="advisor-text" class="text-xs sm:text-sm mt-1 leading-relaxed text-slate-700 dark:text-slate-200">
+              Initializing programmatic exchange telemetry...
+            </p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT COLUMN: ANALYTICS CHARTS & REAL-TIME LOG (3 cols) -->
+    <section class="lg:col-span-3 space-y-5">
+
+      <!-- Line Chart: Clearing CPM vs Bid Floor -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+          Clearing CPM vs. Bid Floor ($)
+        </h3>
+        <div class="h-44">
+          <canvas id="cpmChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Doughnut Chart: Category Share -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+          Slot Share by Category
+        </h3>
+        <div class="h-44 flex items-center justify-center">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Live Auction Feed -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Live Auction Log
+          </h3>
+          <button onclick="clearHistory()" class="text-[11px] text-slate-400 hover:text-rose-500 transition">Clear</button>
+        </div>
+        <div class="overflow-y-auto max-h-56 divide-y divide-slate-100 dark:divide-slate-800 text-xs" id="auction-log-list">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- METHODOLOGY MODAL -->
+  <div id="logic-modal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <h2 class="text-base font-bold flex items-center gap-2">
+          <i data-lucide="cpu" class="w-5 h-5 text-indigo-500"></i> Simulation & Digital Twin Methodology
+        </h2>
+        <button onclick="toggleModal(false)" class="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="text-xs sm:text-sm space-y-3 text-slate-600 dark:text-slate-300 leading-relaxed">
+        <p>
+          <strong>1. Dwell-Time Multiplier:</strong> Lower traffic speeds increase driver exposure time. Calculated as <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">1 + ((100 - Speed) / 100) × 0.8</code> (ranging from <code>1.0x</code> at 100 km/h up to <code>1.76x</code> in gridlock).
+        </p>
+        <p>
+          <strong>2. Contextual Programmatic Triggers:</strong> Advertisers submit base CPM bids plus contextual boosts:
+          <ul class="list-disc pl-5 mt-1 space-y-1">
+            <li><strong>Heatwave (>30°C):</strong> Cold Beverage & HVAC brands apply a <code>+65%</code> bid multiplier.</li>
+            <li><strong>Cold Snap (<5°C):</strong> Hot Coffee & Winter Apparel apply a <code>+55%</code> bid multiplier.</li>
+            <li><strong>Smog Alert (AQI >150):</strong> Health & Air Purifier brands boost bids by <code>+70%</code>.</li>
+            <li><strong>Gridlock (<25 km/h):</strong> Food Delivery & Streaming apps boost bids by <code>+40%</code>.</li>
+          </ul>
+        </p>
+        <p>
+          <strong>3. Second-Price Auction & Floor Governance:</strong> Eligible bids above the <em>Minimum CPM Bid Floor</em> compete. The winner pays the second-highest bid + $0.10 (or the floor). If no advertiser meets the floor, the billboard displays an unpaid <em>House / PSA</em> fallback ad, lowering the Fill Rate.
+        </p>
+      </div>
+      <div class="pt-2 flex justify-end">
+        <button onclick="toggleModal(false)" class="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">
+          Got It
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION SCRIPT -->
+  <script>
+    // Default Advertiser Pool (Can be overridden via JSON import)
+    let advertisers = [
+      {
+        brand: "ArcticSplash Iced Tea",
+        category: "Food & Beverage",
+        baseBid: 10.50,
+        headline: "39°C Outside? Chill Instantly.",
+        subtext: "Ice-cold botanical tea available at the next exit convenience store.",
+        gradient: "from-cyan-500 via-sky-500 to-blue-600",
+        triggerType: "heat",
+        boost: 1.65
+      },
+      {
+        brand: "AeroPure Smart Filters",
+        category: "Health & Wellness",
+        baseBid: 11.00,
+        headline: "Breathe Clean Air Indoors.",
+        subtext: "HEPA-14 air purification removes 99.97% of urban smog & PM2.5.",
+        gradient: "from-emerald-600 via-teal-600 to-cyan-700",
+        triggerType: "smog",
+        boost: 1.70
+      },
+      {
+        brand: "Roast & Co. Hot Espresso",
+        category: "Food & Beverage",
+        baseBid: 9.80,
+        headline: "Warm Up Your Morning Drive.",
+        subtext: "Freshly brewed single-origin espresso. Order ahead on the app.",
+        gradient: "from-amber-700 via-orange-700 to-yellow-800",
+        triggerType: "cold",
+        boost: 1.55
+      },
+      {
+        brand: "QuickBite Delivery",
+        category: "Food & Beverage",
+        baseBid: 11.20,
+        headline: "Stuck in Traffic? Dinner Won't Be.",
+        subtext: "Get $10 off your first delivery arriving right when you get home.",
+        gradient: "from-rose-600 via-pink-600 to-orange-500",
+        triggerType: "gridlock",
+        boost: 1.45
+      },
+      {
+        brand: "VoltDrive EV",
+        category: "Automotive",
+        baseBid: 13.00,
+        headline: "Zero Emissions. Instant Torque.",
+        subtext: "350-mile range with autonomous highway assist. Book a test drive.",
+        gradient: "from-indigo-600 via-blue-700 to-slate-900",
+        triggerType: "none",
+        boost: 1.0
+      },
+      {
+        brand: "UrbanFit 24/7 Gyms",
+        category: "Health & Wellness",
+        baseBid: 8.50,
+        headline: "No Excuses. Open 24 Hours.",
+        subtext: "Join today for $0 enrollment at 14 metro locations.",
+        gradient: "from-violet-600 via-purple-600 to-fuchsia-600",
+        triggerType: "none",
+        boost: 1.0
+      },
+      {
+        brand: "NordicPeak Outerwear",
+        category: "Retail",
+        baseBid: 9.20,
+        headline: "Engineered for Sub-Zero.",
+        subtext: "Thermal-shield parkas now 30% off in-store and online.",
+        gradient: "from-slate-700 via-blue-900 to-indigo-950",
+        triggerType: "cold",
+        boost: 1.50
+      },
+      {
+        brand: "MetroMart Flash Deals",
+        category: "Retail",
+        baseBid: 10.00,
+        headline: "Weekend Tech Clearance Event.",
+        subtext: "Save up to 40% on smart home devices while supplies last.",
+        gradient: "from-fuchsia-600 via-rose-600 to-amber-500",
+        triggerType: "none",
+        boost: 1.0
+      }
+    ];
+
+    // Simulation State
+    let isRunning = true;
+    let speedMultiplier = 1;
+    let cycleCount = 0;
+    let timerId = null;
+    let auctionHistory = [];
+
+    // Chart instances
+    let cpmChart = null;
+    let categoryChart = null;
+
+    // Initialize App
+    window.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      initCharts();
+      runAuctionCycle();
+      startLoop();
+    });
+
+    function startLoop() {
+      if (timerId) clearInterval(timerId);
+      const intervalMs = speedMultiplier === 1 ? 3000 : 1000;
+      timerId = setInterval(() => {
+        if (isRunning) runAuctionCycle();
+      }, intervalMs);
+    }
+
+    function toggleSimulation() {
+      isRunning = !isRunning;
+      const btnText = document.getElementById("text-play-pause");
+      const icon = document.getElementById("icon-play-pause");
+      btnText.textContent = isRunning ? "Pause Loop" : "Resume Loop";
+      icon.setAttribute("data-lucide", isRunning ? "pause" : "play");
+      lucide.createIcons();
+    }
+
+    function toggleSpeed() {
+      speedMultiplier = speedMultiplier === 1 ? 3 : 1;
+      document.getElementById("btn-speed").textContent = `Speed: ${speedMultiplier}x`;
+      startLoop();
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle("dark");
+      const icon = document.getElementById("theme-icon");
+      icon.setAttribute("data-lucide", isDark ? "sun" : "moon");
+      lucide.createIcons();
+      updateChartTheme();
+    }
+
+    function toggleModal(show) {
+      const modal = document.getElementById("logic-modal");
+      modal.classList.toggle("hidden", !show);
+    }
+
+    // Presets
+    function applyScenario(key) {
+      const presets = {
+        rush: { name: "Morning Rush Hour", speed: 12, density: 110, temp: 19, aqi: 95, floor: 12.0 },
+        heatwave: { name: "Heatwave Alert", speed: 55, density: 65, temp: 39, aqi: 130, floor: 10.0 },
+        smog: { name: "Smog & Air Alert", speed: 40, density: 50, temp: 26, aqi: 195, floor: 8.0 },
+        latenight: { name: "Late-Night High Floor", speed: 95, density: 15, temp: 14, aqi: 35, floor: 20.0 }
+      };
+      const p = presets[key];
+      if (!p) return;
+
+      document.getElementById("input-speed").value = p.speed;
+      document.getElementById("input-density").value = p.density;
+      document.getElementById("input-temp").value = p.temp;
+      document.getElementById("input-aqi").value = p.aqi;
+      document.getElementById("input-floor").value = p.floor;
+      document.getElementById("active-scenario-badge").textContent = p.name;
+
+      updateSliderLabels();
+      runAuctionCycle();
+    }
+
+    function onSliderChange() {
+      document.getElementById("active-scenario-badge").textContent = "Custom";
+      updateSliderLabels();
+    }
+
+    function updateSliderLabels() {
+      const speed = Number(document.getElementById("input-speed").value);
+      const density = Number(document.getElementById("input-density").value);
+      const temp = Number(document.getElementById("input-temp").value);
+      const aqi = Number(document.getElementById("input-aqi").value);
+      const floor = Number(document.getElementById("input-floor").value);
+
+      document.getElementById("val-speed").textContent = `${speed} km/h`;
+      document.getElementById("val-density").textContent = `${density} cars/min`;
+      document.getElementById("val-temp").textContent = `${temp}°C`;
+
+      let aqiLabel = "Good";
+      if (aqi > 150) aqiLabel = "Unhealthy";
+      else if (aqi > 100) aqiLabel = "Sensitive";
+      else if (aqi > 50) aqiLabel = "Moderate";
+      document.getElementById("val-aqi").textContent = `${aqi} (${aqiLabel})`;
+      document.getElementById("val-floor").textContent = `$${floor.toFixed(2)}`;
+    }
+
+    function updateGovernanceState() {
+      runAuctionCycle();
+    }
+
+    // Core Programmatic Auction Engine
+    function runAuctionCycle() {
+      cycleCount++;
+      const speed = Number(document.getElementById("input-speed").value);
+      const density = Number(document.getElementById("input-density").value);
+      const temp = Number(document.getElementById("input-temp").value);
+      const aqi = Number(document.getElementById("input-aqi").value);
+      const floor = Number(document.getElementById("input-floor").value);
+      const govActive = document.getElementById("toggle-governance").checked;
+
+      // 1. Calculate Dwell-Time Multiplier & Viewable Impressions/Hr
+      const dwellMult = Number((1 + ((100 - speed) / 100) * 0.8).toFixed(2));
+      const hourlyVehicles = density * 60;
+      const avgPassengers = 1.45;
+      const impressionsPerHr = Math.round(hourlyVehicles * avgPassengers * dwellMult);
+
+      // 2. Check Governance Municipal Override (15% slot reservation when Eco/Safety is active & AQI > 150)
+      const isMunicipalSlot = govActive && aqi > 150 && (cycleCount % 6 === 0);
+
+      let winner = null;
+      let clearingCPM = 0;
+      let triggerReason = "Standard Rotation";
+
+      if (isMunicipalSlot) {
+        winner = {
+          brand: "City Environmental Dept.",
+          category: "Public Safety PSA",
+          headline: `AIR QUALITY ALERT: AQI ${aqi}`,
+          subtext: "Limit prolonged outdoor exertion. Free transit passes active today.",
+          gradient: "from-teal-700 via-emerald-800 to-slate-900"
+        };
+        clearingCPM = 0;
+        triggerReason = "Governance Safety Override";
+      } else {
+        // 3. Evaluate all advertiser bids with random market jitter (+/- 12%) + contextual triggers
+        const evaluatedBids = advertisers.map(ad => {
+          let mult = 1.0;
+          let matchedTrigger = null;
+
+          if (ad.triggerType === "heat" && temp >= 30) {
+            mult = ad.boost;
+            matchedTrigger = `Heatwave (${temp}°C)`;
+          } else if (ad.triggerType === "cold" && temp <= 5) {
+            mult = ad.boost;
+            matchedTrigger = `Cold Weather (${temp}°C)`;
+          } else if (ad.triggerType === "smog" && aqi >= 150) {
+            mult = ad.boost;
+            matchedTrigger = `High AQI (${aqi})`;
+          } else if (ad.triggerType === "gridlock" && speed <= 25) {
+            mult = ad.boost;
+            matchedTrigger = `Gridlock (${speed} km/h)`;
+          }
+
+          // Dwell multiplier boosts advertiser willingness to pay slightly
+          const dwellBidFactor = 1 + (dwellMult - 1) * 0.35;
+          const jitter = 0.88 + Math.random() * 0.24;
+          const finalBid = Number((ad.baseBid * mult * dwellBidFactor * jitter).toFixed(2));
+
+          return { ...ad, finalBid, matchedTrigger };
+        });
+
+        // Sort descending by bid
+        evaluatedBids.sort((a, b) => b.finalBid - a.finalBid);
+        const topBid = evaluatedBids[0];
+        const secondBid = evaluatedBids[1] ? evaluatedBids[1].finalBid : floor;
+
+        if (topBid && topBid.finalBid >= floor) {
+          winner = topBid;
+          // Second-price auction clearing price
+          clearingCPM = Number(Math.min(topBid.finalBid, Math.max(floor, secondBid + 0.15)).toFixed(2));
+          triggerReason = topBid.matchedTrigger || "RTB Open Auction";
+        } else {
+          // Unsold inventory fallback
+          winner = {
+            brand: "DOOH Network House Ad",
+            category: "Unsold / House",
+            headline: "Advertise on This Smart Screen",
+            subtext: "Reach thousands of daily commuters in real time. Scan to book.",
+            gradient: "from-slate-700 via-slate-800 to-slate-900"
+          };
+          clearingCPM = 0;
+          triggerReason = "Below Bid Floor (Unsold)";
+        }
+      }
+
+      // 4. Hardware Telemetry (Brightness & Power)
+      let brightness = 95;
+      if (govActive && aqi > 150) brightness = 70;
+      else if (speed > 85 && density < 25) brightness = 75;
+      const powerKw = (1.2 + (brightness / 100) * 4.1).toFixed(1);
+
+      // 5. Log Record
+      const hourlyRev = (impressionsPerHr / 1000) * clearingCPM;
+      const record = {
+        cycle: cycleCount,
+        timestamp: new Date().toLocaleTimeString(),
+        brand: winner.brand,
+        category: winner.category,
+        clearingCPM,
+        floor,
+        speed,
+        temp,
+        aqi,
+        impressionsPerHr,
+        hourlyRev: Number(hourlyRev.toFixed(2)),
+        isPaid: clearingCPM > 0
+      };
+      auctionHistory.unshift(record);
+      if (auctionHistory.length > 100) auctionHistory.pop();
+
+      // 6. Update UI Elements
+      renderBillboard(winner, clearingCPM, triggerReason, brightness, powerKw, dwellMult);
+      updateKPIs(clearingCPM, floor, hourlyRev, impressionsPerHr);
+      updateAdvisor(clearingCPM, floor, speed, density, temp, aqi, govActive);
+      updateCharts();
+      renderLogTable();
+    }
+
+    function renderBillboard(winner, cpm, trigger, brightness, powerKw, dwellMult) {
+      const canvas = document.getElementById("billboard-canvas");
+      canvas.className = `billboard-screen relative rounded-lg p-6 min-h-[220px] flex flex-col justify-between text-white overflow-hidden bg-gradient-to-br ${winner.gradient}`;
+      canvas.style.filter = `brightness(${0.65 + (brightness / 100) * 0.4})`;
+
+      document.getElementById("ad-category-pill").textContent = winner.category;
+      document.getElementById("ad-cpm-pill").textContent = cpm > 0 ? `Clearing CPM: $${cpm.toFixed(2)}` : "House / PSA Slot ($0.00)";
+      document.getElementById("ad-brand").textContent = winner.brand;
+      document.getElementById("ad-headline").textContent = winner.headline;
+      document.getElementById("ad-subtext").textContent = winner.subtext;
+      document.getElementById("trigger-badge").textContent = `Trigger: ${trigger}`;
+
+      document.getElementById("hw-brightness").textContent = `Brightness: ${brightness}%`;
+      document.getElementById("hw-power").textContent = `Power: ${powerKw} kW`;
+      document.getElementById("hw-dwell").textContent = `Dwell Mult: ${dwellMult}x`;
+      document.getElementById("hw-slot").textContent = `Cycle #${cycleCount}`;
+    }
+
+    function updateKPIs(cpm, floor, hourlyRev, impressionsPerHr) {
+      const recent = auctionHistory.slice(0, 20);
+      const paidCount = recent.filter(r => r.isPaid).length;
+      const fillRate = recent.length ? Math.round((paidCount / recent.length) * 100) : 0;
+      const unsoldCount = recent.length - paidCount;
+
+      document.getElementById("kpi-cpm").textContent = `$${cpm.toFixed(2)}`;
+      document.getElementById("kpi-cpm-sub").textContent = `Floor: $${floor.toFixed(2)}`;
+      document.getElementById("kpi-revenue").textContent = `$${hourlyRev.toFixed(2)}/hr`;
+      document.getElementById("kpi-fill").textContent = `${fillRate}%`;
+      document.getElementById("kpi-fill-sub").textContent = `${unsoldCount} unsold in last ${recent.length}`;
+      document.getElementById("kpi-impressions").textContent = impressionsPerHr.toLocaleString();
+    }
+
+    function updateAdvisor(cpm, floor, speed, density, temp, aqi, govActive) {
+      const recent = auctionHistory.slice(0, 10);
+      const fillRate = recent.length ? (recent.filter(r => r.isPaid).length / recent.length) * 100 : 100;
+      const advisorText = document.getElementById("advisor-text");
+      const advisorBox = document.getElementById("advisor-box");
+
+      let message = "";
+      let alertLevel = "info"; // info, warn, good
+
+      if (fillRate < 50) {
+        alertLevel = "warn";
+        const suggestedFloor = Math.max(3.5, floor * 0.55).toFixed(2);
+        message = `Revenue Leakage Alert: Paid fill rate has dropped to ${Math.round(fillRate)}% because the $${floor.toFixed(2)} CPM floor exceeds current advertiser demand. Recommend lowering the bid floor to ~$${suggestedFloor} to recapture unsold inventory.`;
+      } else if (aqi > 150 && !govActive) {
+        alertLevel = "warn";
+        message = `Governance Notice: Hazardous Air Quality (AQI ${aqi}) detected while Eco & Public Safety Override is OFF. Enable governance override to cap LED power draw and broadcast municipal health advisories.`;
+      } else if (speed <= 20 && density >= 90 && floor < 11) {
+        alertLevel = "good";
+        message = `Yield Optimization Opportunity: Heavy gridlock (${speed} km/h) is driving peak dwell multipliers. Demand is high—consider raising your Minimum CPM Floor to $12.50+ to maximize yield per impression.`;
+      } else if (temp >= 32) {
+        alertLevel = "good";
+        message = `Contextual Surge Active: High ambient temperature (${temp}°C) is automatically triggering +65% programmatic bid boosts from Cold Beverage & HVAC advertisers.`;
+      } else {
+        alertLevel = "info";
+        message = `System Balanced: Exchange fill rate is healthy at ${Math.round(fillRate)}% with steady programmatic competition. Continue monitoring traffic dwell multipliers for dynamic floor adjustments.`;
+      }
+
+      advisorText.textContent = message;
+
+      if (alertLevel === "warn") {
+        advisorBox.className = "rounded-xl border p-4 shadow-sm transition-colors bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800";
+      } else if (alertLevel === "good") {
+        advisorBox.className = "rounded-xl border p-4 shadow-sm transition-colors bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800";
+      } else {
+        advisorBox.className = "rounded-xl border p-4 shadow-sm transition-colors bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800";
+      }
+    }
+
+    function renderLogTable() {
+      const container = document.getElementById("auction-log-list");
+      const items = auctionHistory.slice(0, 12);
+      container.innerHTML = items.map(item => `
+        <div class="py-2 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-semibold truncate ${item.isPaid ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 italic'}">
+              #${item.cycle} ${item.brand}
+            </div>
+            <div class="text-[10px] text-slate-400">${item.timestamp} • ${item.category}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="font-mono font-bold ${item.isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}">
+              $${item.clearingCPM.toFixed(2)}
+            </div>
+            <div class="text-[10px] text-slate-400">${(item.impressionsPerHr / 1000).toFixed(1)}k imp/h</div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function clearHistory() {
+      auctionHistory = [];
+      cycleCount = 0;
+      renderLogTable();
+      updateCharts();
+    }
+
+    // CHARTS (Chart.js)
+    function initCharts() {
+      const isDark = document.documentElement.classList.contains("dark");
+      const gridColor = isDark ? "rgba(148, 163, 184, 0.12)" : "rgba(15, 23, 42, 0.08)";
+      const textColor = isDark ? "#94a3b8" : "#475569";
+
+      const ctx1 = document.getElementById("cpmChart").getContext("2d");
+      cpmChart = new Chart(ctx1, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Clearing CPM ($)",
+              data: [],
+              borderColor: "#6366f1",
+              backgroundColor: "rgba(99, 102, 241, 0.15)",
+              borderWidth: 2,
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: "Bid Floor ($)",
+              data: [],
+              borderColor: "#10b981",
+              borderDash: [5, 5],
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: textColor, boxWidth: 12, font: { size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } }
+          }
+        }
+      });
+
+      const ctx2 = document.getElementById("categoryChart").getContext("2d");
+      categoryChart = new Chart(ctx2, {
+        type: "doughnut",
+        data: {
+          labels: ["Food & Beverage", "Automotive", "Health & Wellness", "Retail", "Unsold / House"],
+          datasets: [{
+            data: [1, 1, 1, 1, 0],
+            backgroundColor: ["#06b6d4", "#6366f1", "#10b981", "#f59e0b", "#64748b"],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "62%",
+          plugins: {
+            legend: { position: "right", labels: { color: textColor, boxWidth: 10, font: { size: 10 } } }
+          }
+        }
+      });
+    }
+
+    function updateCharts() {
+      if (!cpmChart || !categoryChart) return;
+      const recent15 = [...auctionHistory.slice(0, 15)].reverse();
+
+      cpmChart.data.labels = recent15.map(r => `#${r.cycle}`);
+      cpmChart.data.datasets[0].data = recent15.map(r => r.clearingCPM);
+      cpmChart.data.datasets[1].data = recent15.map(r => r.floor);
+      cpmChart.update("none");
+
+      const counts = {
+        "Food & Beverage": 0,
+        "Automotive": 0,
+        "Health & Wellness": 0,
+        "Retail": 0,
+        "Unsold / House": 0
+      };
+
+      auctionHistory.forEach(r => {
+        if (counts[r.category] !== undefined) counts[r.category]++;
+        else counts["Unsold / House"]++;
+      });
+
+      categoryChart.data.datasets[0].data = Object.values(counts);
+      categoryChart.update("none");
+    }
+
+    function updateChartTheme() {
+      if (!cpmChart || !categoryChart) return;
+      const isDark = document.documentElement.classList.contains("dark");
+      const gridColor = isDark ? "rgba(148, 163, 184, 0.12)" : "rgba(15, 23, 42, 0.08)";
+      const textColor = isDark ? "#94a3b8" : "#475569";
+
+      cpmChart.options.plugins.legend.labels.color = textColor;
+      cpmChart.options.scales.x.ticks.color = textColor;
+      cpmChart.options.scales.y.ticks.color = textColor;
+      cpmChart.options.scales.y.grid.color = gridColor;
+      cpmChart.update();
+
+      categoryChart.options.plugins.legend.labels.color = textColor;
+      categoryChart.update();
+    }
+
+    // DATA EXPORT (CSV)
+    function exportCSV() {
+      if (auctionHistory.length === 0) return;
+      const headers = [
+        "Cycle",
+        "Timestamp",
+        "Winning_Brand",
+        "Category",
+        "Clearing_CPM_USD",
+        "Bid_Floor_USD",
+        "Traffic_Speed_KMH",
+        "Temp_C",
+        "AQI",
+        "Est_Impressions_Hr",
+        "Est_Revenue_Hr_USD"
+      ];
+
+      const rows = auctionHistory.map(r => [
+        r.cycle,
+        `"${r.timestamp}"`,
+        `"${r.brand.replace(/"/g, '""')}"`,
+        `"${r.category}"`,
+        r.clearingCPM.toFixed(2),
+        r.floor.toFixed(2),
+        r.speed,
+        r.temp,
+        r.aqi,
+        r.impressionsPerHr,
+        r.hourlyRev.toFixed(2)
+      ].join(","));
+
+      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `dooh_auction_log_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // SAMPLE JSON TEMPLATE DOWNLOAD
+    function downloadSampleJSON() {
+      const sample = [
+        {
+          brand: "SolarCharge Stations",
+          category: "Automotive",
+          baseBid: 14.50,
+          headline: "Fast-Charge in 15 Minutes.",
+          subtext: "Ultra-fast EV charging hubs located 2 km ahead on Exit 14.",
+          gradient: "from-emerald-500 via-green-600 to-teal-800",
+          triggerType: "gridlock",
+          boost: 1.5
+        },
+        {
+          brand: "GlacierMint Hydration",
+          category: "Food & Beverage",
+          baseBid: 12.00,
+          headline: "Beat the Heatwave With Electrolytes.",
+          subtext: "Zero sugar sports hydration now chilled at all metro kiosks.",
+          gradient: "from-sky-400 via-blue-600 to-indigo-800",
+          triggerType: "heat",
+          boost: 1.8
+        },
+        {
+          brand: "PureBreathe Smart Masks",
+          category: "Health & Wellness",
+          baseBid: 13.20,
+          headline: "High Smog Advisory Protection.",
+          subtext: "Lightweight active-carbon filtration for urban commuters.",
+          gradient: "from-amber-600 via-orange-700 to-red-800",
+          triggerType: "smog",
+          boost: 1.75
+        }
+      ];
+
+      const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "custom_dooh_bidders.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    // DATA IMPORT (JSON)
+    function importJSONRules(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            alert("Invalid JSON format: Expected a non-empty array of advertiser objects.");
+            return;
+          }
+          // Validate required keys
+          const valid = parsed.every(item => item.brand && item.category && typeof item.baseBid === "number" && item.headline);
+          if (!valid) {
+            alert("Each advertiser object must include: brand, category, baseBid (number), and headline.");
+            return;
+          }
+
+          advertisers = parsed.map(item => ({
+            brand: item.brand,
+            category: item.category,
+            baseBid: item.baseBid,
+            headline: item.headline,
+            subtext: item.subtext || "Programmatic Smart Billboard Campaign",
+            gradient: item.gradient || "from-indigo-600 via-purple-600 to-pink-600",
+            triggerType: item.triggerType || "none",
+            boost: item.boost || 1.0
+          }));
+
+          document.getElementById("rules-count-label").textContent = `Active Bidders: ${advertisers.length} Custom Advertisers`;
+          runAuctionCycle();
+        } catch (err) {
+          alert("Error parsing JSON file: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
